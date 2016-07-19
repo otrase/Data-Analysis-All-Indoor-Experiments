@@ -1,0 +1,1820 @@
+#---IMPORT FILES---
+import numpy as np 
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import os
+import itertools
+import numpy.polynomial.polynomial as poly
+from scipy import stats
+from scipy.optimize import curve_fit
+%matplotlib inline
+mpl.rcParams["figure.figsize"]=(12,8)
+
+#---CREATE DATAFRAME FROM FILES---
+path='C:\Users\Olivia\Documents\Thesis\Licor Data\Experiment 3\CSV/'
+dataframe = []
+for File in os.listdir(path):
+    name, ext = os.path.splitext(File) # gives you the name of each file separate from its extension (.csv)
+    df=pd.read_csv('%s%s'%(path,File)) # defines the dataframe
+    df['Filename'] = name # creates new column with the file names and fills it
+    dataframe.append(df)
+    Data1 = pd.concat(dataframe)
+path='C:\Users\Olivia\Documents\Thesis\Licor Data\Experiment 2\CSV/'
+dataframe = []
+for File in os.listdir(path):
+    name, ext = os.path.splitext(File) # gives you the name of each file separate from its extension (.csv)
+    df=pd.read_csv('%s%s'%(path,File)) # defines the dataframe
+    df['Filename'] = name # creates new column with the file names and fills it
+    dataframe.append(df)
+    Data2 = pd.concat(dataframe)
+frames = (Data1,Data2)
+Data = pd.concat(frames)
+#---REMOVE REMARKS---
+Data = Data[::][Data.Obs!='Remark=']
+
+#---CREATE NEW COLUMNS FOR LABELING----
+Data["Date"], Data["Plant"], Data["Number"], Data["Side"] = zip(*Data["Filename"].str.split('_').tolist())
+Data.loc[:,'Number'] = Data['Number'].astype(float) # changes the column, Number, from strings into floats (numbers)
+Data["Date"]=pd.to_datetime(Data['Date'], format = "%y%m%d")
+Data.loc[:,'Inoculant'] = 5
+Data.loc[:,'Barrier'] = 5
+Data.Inoculant.loc[Data.Number<=24] =1
+Data.Inoculant.loc[Data.Number>24] =0
+barrier = (18,20,22,24,26,28,30,32,50,52,54,56,58,60,62,64)
+mesh = (17,19,21,23,25,27,29,31,49,51,53,55,57,59,61,63)
+for i in barrier:
+    Data.Barrier.loc[(Data.Number==i)]=1
+for j in mesh:
+    Data.Barrier.loc[(Data.Number==j)]=0
+    
+#---REMOVE BAD DATA---
+Data = Data[::][Data.Number!=51]
+Data = Data[::][Data.Number!=63]
+Data = Data[::][Data.Number!=50]
+Data = Data[::][Data.Obs!='5']
+Data = Data[::][Data.Obs!='12']
+#---LIGHT CURVES---
+Data=Data[(Data.Photo>-1)]
+
+#---DEFINE CO2 RESPONSE CURVE---
+CO2curve = [50, 100, 200, 300, 400, 600, 800, 1200, 1400, 2000] # 400 is omitted for now because the dataset has a ton of outliers at 400
+
+#---Definitions---
+def fitfunc_michment(xdata, Vmax, Km,R):
+    "Michaelis-Menten function" 
+    return ((Vmax * xdata) / (Km + xdata))-R
+
+colors = itertools.cycle(["r","r","b","b","r","r","b","b"]) 
+fill = itertools.cycle(["r","r","b","b","none","none","none","none"])
+labels = itertools.cycle(["Soybean +I Side A","--","Soybean -I Side A","--","Soybean +I Side B","--","Soybean -I Side B","--"])
+
+a=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+aa=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+b=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+bb=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+c=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+cc=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+d=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+dd=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+
+for i in [a,aa,b,bb,c,cc,d,dd]:
+    x=i.Ci
+    y=i.Photo
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    plt.title('Day 2 A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-5,30)
+    plt.xlim(-100,2000)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+colors = itertools.cycle(["r","r","b","b","r","r","b","b"]) 
+fill = itertools.cycle(["r","r","b","b","none","none","none","none"])
+labels = itertools.cycle(["Soybean +I Side A","--","Soybean -I Side A","--","Soybean +I Side B","--","Soybean -I Side B","--"])
+
+a=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-28')]
+aa=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+b=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+bb=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+c=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+cc=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+d=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+dd=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+
+for i in [a,aa,b,bb,c,cc,d,dd]:
+    x=i.Ci
+    y=i.Photo
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    plt.title('Day 4 A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-5,30)
+    plt.xlim(-100,2000)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+colors = itertools.cycle(["r","r","b","b","r","r","b","b"]) 
+fill = itertools.cycle(["r","r","b","b","none","none","none","none"])
+labels = itertools.cycle(["Corn +I Side A","--", "Corn -I Side A","--", "Corn +I Side B","--", "Corn -I Side B","--"])
+
+a=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+aa=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+b=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+bb=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+c=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+cc=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+d=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+dd=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+
+for i in [a,aa,b,bb,c,cc,d,dd]:
+    x=i.Ci
+    y=i.Photo
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    plt.title('Day 2 A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-5,30)
+    plt.xlim(-100,2000)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+colors = itertools.cycle(["r","r","b","b","r","r","b","b"]) 
+fill = itertools.cycle(["r","r","b","b","none","none","none","none"])
+labels = itertools.cycle(["Corn +I Side A","--", "Corn -I Side A","--", "Corn +I Side B","--", "Corn -I Side B","--"])
+
+a=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-28')]
+aa=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+b=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+bb=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+c=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+cc=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+d=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+dd=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+
+for i in [a,aa,b,bb,c,cc,d,dd]:
+    x=i.Ci
+    y=i.Photo
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    plt.title('Day 4 A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-5,30)
+    plt.xlim(-100,2000)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+CO2curve2=[50,100,200,300]
+
+#---creating cycles for graph---
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Soybean +I Side A mesh","Soybean -I Side A mesh","Soybean +I Side B mesh","Soybean -I Side B mesh","Soybean +I Side A barrier","Soybean -I Side A barrier","Soybean +I Side B barrier","Soybean -I Side B barrier"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20,])
+place = itertools.cycle([2,-1.5,1.5,-2.5,3,0.5,1.5,-0.5])
+place2 = itertools.cycle([3,-0.5,2.5,-1.5,4,1.5,2.5,0.5])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+#---creating slices for each set of data---
+a=Data.loc[(Data.Number>=19)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date<='2016-06-28')]
+b=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date<='2016-06-28')]
+c=Data.loc[(Data.Number>=19)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date<='2016-06-28')]
+d=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date<='2016-06-28')]
+aa=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date<='2016-07-06')]
+bb=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date<='2016-07-06')]
+cc=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date<='2016-07-06')]
+dd=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date<='2016-07-06')]
+e=Data.loc[(Data.Number>=19)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date<='2016-06-28')]
+f=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date<='2016-06-28')]
+g=Data.loc[(Data.Number>=19)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date<='2016-06-28')]
+h=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date<='2016-06-28')]
+ee=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date<='2016-07-06')]
+ff=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date<='2016-07-06')]
+gg=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date<='2016-07-06')]
+hh=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date<='2016-07-06')]
+
+#---combining the two sets of data---
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+
+#---creating empty lists for TPU and VCmax---
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))  
+
+#---creating a for-loop that first runs through each dataframe and then each CO2 value---
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+
+#---initializing cycles for graph---
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+
+#---plotting scatter---
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    
+#---creating the TPU curve-fit from the michaelis mentin function---
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+
+#---appending TPU to the empty list---
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+
+#---creating the VCmax curve-fit---
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+
+#---Making the graph pretty---
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+150,np.max(yfit21)-PLACE], xy=[np.max(x)+150,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE2], xy=[np.max(x)+30,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+    plt.title('Soybean, A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+#---creating a bar graph that compares TPU values---
+N = 2
+
+TPU_A_mesh = (TPU[0:2])
+TPU_B_mesh = (TPU[2:4])
+TPU_A_bar = (TPU[4:6])
+TPU_B_bar = (TPU[6:8])
+
+TPUAm = []
+for i in TPU_A_mesh:
+    TPUAm.append(i[0])
+TPUBm = []
+for i in TPU_B_mesh:
+    TPUBm.append(i[0])
+TPUAb = []
+for i in TPU_A_bar:
+    TPUAb.append(i[0])
+TPUBb = []
+for i in TPU_B_bar:
+    TPUBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, TPUBm, width, color='b')
+rects3 = ax.bar(ind+2*width, TPUAb, width, color='g')
+rects4 = ax.bar(ind+3*width, TPUBb, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Soybean, TPU A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+#ax.set_xticks(ind+2 + width)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+plt.show()
+#---creating a bar graph that compares VCmax values---
+VCmax_A_mesh = (VCmax[0:2])
+VCmax_B_mesh = (VCmax[2:4])
+VCmax_A_bar = (VCmax[4:6])
+VCmax_B_bar = (VCmax[6:8])
+
+VCmaxAm = []
+for i in VCmax_A_mesh:
+    VCmaxAm.append(i[0])
+VCmaxBm = []
+for i in VCmax_B_mesh:
+    VCmaxBm.append(i[0])
+VCmaxAb = []
+for i in VCmax_A_bar:
+    VCmaxAb.append(i[0])
+VCmaxBb = []
+for i in VCmax_B_bar:
+    VCmaxBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, VCmaxBm, width, color='b')
+rects3 = ax.bar(ind+2*width, VCmaxAb, width, color='g')
+rects4 = ax.bar(ind+3*width, VCmaxBb, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Soybean, VCmax A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_ylim(0,70)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+CO2curve2=[50,100,200,300]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Soybean +I Side A mesh","Soybean -I Side A mesh","Soybean +I Side B mesh","Soybean -I Side B mesh","Soybean +I Side A barrier","Soybean -I Side A barrier","Soybean +I Side B barrier","Soybean -I Side B barrier"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20,])
+place = itertools.cycle([0,0,0,0,0,0.5,0,0])
+place2 = itertools.cycle([1,1,1,1,1,1.5,1,1])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+b=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+c=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+d=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+aa=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+bb=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+cc=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+dd=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+e=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+f=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+g=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+h=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+ee=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+ff=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+gg=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+hh=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    #plt.plot(x2,yfit21_2,  linestyle='--', dashes=(10, 10), linewidth=2, c='y')
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE], xy=[np.max(x)+30,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE2], xy=[np.max(x)+30,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+
+    plt.title('Soybean, A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+N = 2
+
+TPU_A_mesh = (TPU[0:2])
+TPU_B_mesh = (TPU[2:4])
+TPU_A_bar = (TPU[4:6])
+TPU_B_bar = (TPU[6:8])
+
+TPUAm = []
+for i in TPU_A_mesh:
+    TPUAm.append(i[0])
+TPUBm = []
+for i in TPU_B_mesh:
+    TPUBm.append(i[0])
+TPUAb = []
+for i in TPU_A_bar:
+    TPUAb.append(i[0])
+TPUBb = []
+for i in TPU_B_bar:
+    TPUBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, TPUBm, width, color='b')
+rects3 = ax.bar(ind+2*width, TPUAb, width, color='g')
+rects4 = ax.bar(ind+3*width, TPUBb, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Soybean, TPU A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+I', '-I', '+I','-I'))
+ax.set_ylim(0,50)
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+VCmax_A_mesh = (VCmax[0:2])
+VCmax_B_mesh = (VCmax[2:4])
+VCmax_A_bar = (VCmax[4:6])
+VCmax_B_bar = (VCmax[6:8])
+
+VCmaxAm = []
+for i in VCmax_A_mesh:
+    VCmaxAm.append(i[0])
+VCmaxBm = []
+for i in VCmax_B_mesh:
+    VCmaxBm.append(i[0])
+VCmaxAb = []
+for i in VCmax_A_bar:
+    VCmaxAb.append(i[0])
+VCmaxBb = []
+for i in VCmax_B_bar:
+    VCmaxBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, VCmaxBm, width, color='b')
+rects3 = ax.bar(ind+2*width, VCmaxAb, width, color='g')
+rects4 = ax.bar(ind+3*width, VCmaxBb, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Soybean, VCmax A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_ylim(0,70)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+CO2curve2=[100,200,300,400]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Corn +I Side A mesh","Corn -I Side A mesh","Corn +I Side B mesh","Corn -I Side B mesh","Corn +I Side A barrier","Corn -I Side A barrier","Corn +I Side B barrier","Corn -I Side B barrier"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20])
+place = itertools.cycle([0,0,-0.5,-1,0.5,0,0.5,1.5])
+place2 = itertools.cycle([1,1,0.5,0,1.5,1,1.5,2.5])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+b=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+c=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+d=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+aa=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+bb=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+cc=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+dd=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+e=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+f=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+g=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+h=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+ee=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+ff=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+gg=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+hh=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE], xy=[np.max(x)+30,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE2], xy=[np.max(x)+30,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+    
+    plt.title('Day 2 A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+N = 2
+
+TPU_A_mesh = (TPU[0:2])
+TPU_B_mesh = (TPU[2:4])
+TPU_A_bar = (TPU[4:6])
+TPU_B_bar = (TPU[6:8])
+
+TPUAm = []
+for i in TPU_A_mesh:
+    TPUAm.append(i[0])
+TPUBm = []
+for i in TPU_B_mesh:
+    TPUBm.append(i[0])
+TPUAb = []
+for i in TPU_A_bar:
+    TPUAb.append(i[0])
+TPUBb = []
+for i in TPU_B_bar:
+    TPUBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, TPUBm, width, color='b')
+rects3 = ax.bar(ind+2*width, TPUAb, width, color='g')
+rects4 = ax.bar(ind+3*width, TPUBb, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Corn Day 2, TPU A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+I', '-I', '+I','-I'))
+ax.set_ylim(0,50)
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+VCmax_A_mesh = (VCmax[0:2])
+VCmax_B_mesh = (VCmax[2:4])
+VCmax_A_bar = (VCmax[4:6])
+VCmax_B_bar = (VCmax[6:8])
+
+VCmaxAm = []
+for i in VCmax_A_mesh:
+    VCmaxAm.append(i[0])
+VCmaxBm = []
+for i in VCmax_B_mesh:
+    VCmaxBm.append(i[0])
+VCmaxAb = []
+for i in VCmax_A_bar:
+    VCmaxAb.append(i[0])
+VCmaxBb = []
+for i in VCmax_B_bar:
+    VCmaxBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, VCmaxBm, width, color='b')
+rects3 = ax.bar(ind+2*width, VCmaxAb, width, color='g')
+rects4 = ax.bar(ind+3*width, VCmaxBb, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Soybean, VCmax A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_ylim(0,70)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+CO2curve2=[100,200,300,400]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Corn +I Side A mesh","Corn -I Side A mesh","Corn +I Side B mesh","Corn -I Side B mesh","Corn +I Side A barrier","Corn -I Side A barrier","Corn +I Side B barrier","Corn -I Side B barrier"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20])
+place = itertools.cycle([0,-1.5,0,-0.5,0,0,-0.5,-1.5])
+place2 = itertools.cycle([1,-0.5,1,0.5,1,1,0.5,-0.5])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+b=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+c=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+d=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+aa=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+bb=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+cc=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+dd=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+e=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+f=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+g=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+h=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+ee=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+ff=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+gg=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+hh=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>'2016-07-06')&(Data.Date<='2016-07-08')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE], xy=[np.max(x)+30,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE2], xy=[np.max(x)+30,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+    
+    plt.title('Day 4, A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+N = 2
+
+TPU_A_mesh = (TPU[0:2])
+TPU_B_mesh = (TPU[2:4])
+TPU_A_bar = (TPU[4:6])
+TPU_B_bar = (TPU[6:8])
+
+TPUAm = []
+for i in TPU_A_mesh:
+    TPUAm.append(i[0])
+TPUBm = []
+for i in TPU_B_mesh:
+    TPUBm.append(i[0])
+TPUAb = []
+for i in TPU_A_bar:
+    TPUAb.append(i[0])
+TPUBb = []
+for i in TPU_B_bar:
+    TPUBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, TPUBm, width, color='b')
+rects3 = ax.bar(ind+2*width, TPUAb, width, color='g')
+rects4 = ax.bar(ind+3*width, TPUBb, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Corn Day 4, TPU A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+I', '-I', '+I','-I'))
+ax.set_ylim(0,50)
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+VCmax_A_mesh = (VCmax[0:2])
+VCmax_B_mesh = (VCmax[2:4])
+VCmax_A_bar = (VCmax[4:6])
+VCmax_B_bar = (VCmax[6:8])
+
+VCmaxAm = []
+for i in VCmax_A_mesh:
+    VCmaxAm.append(i[0])
+VCmaxBm = []
+for i in VCmax_B_mesh:
+    VCmaxBm.append(i[0])
+VCmaxAb = []
+for i in VCmax_A_bar:
+    VCmaxAb.append(i[0])
+VCmaxBb = []
+for i in VCmax_B_bar:
+    VCmaxBb.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUAm, width, color='r')
+rects2 = ax.bar(ind + width, VCmaxBm, width, color='b')
+rects3 = ax.bar(ind+2*width, VCmaxAb, width, color='g')
+rects4 = ax.bar(ind+3*width, VCmaxBb, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Soybean, VCmax A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_ylim(0,90)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('A mesh', 'B mesh','A barrier', 'B barrier'), loc='upper left')
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+# Scatter Plot with VCmax and TPU curves
+
+CO2curve2=[50,100,200,300]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Soybean +I +B no bug","Soybean +I +B bug","Soybean +I -B no bug","Soybean +I -B bug","Soybean -I +B no bug","Soybean -I +B bug","Soybean -I -B no bug","Soybean -I -B bug"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20])
+place = itertools.cycle([0.5,0,1,0,0,0,0,0])
+place2 = itertools.cycle([1.5,1,2,1,1,1,1,1])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+b=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+c=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+d=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+e=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+f=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+g=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+h=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+aa=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+bb=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+cc=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+dd=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+ee=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+ff=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+gg=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+hh=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE], xy=[np.max(x)+20,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE2], xy=[np.max(x)+20,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+
+    plt.title('Soybean Side A, A-Ci Curve: day 2 vs. day 4', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+# Bar Chart for TPU values
+
+N = 2
+TPU_day2_1 = (TPU[0],TPU[2])
+TPU_day4_1 = (TPU[1], TPU[3])
+TPU_day2_0 = (TPU[4],TPU[6])
+TPU_day4_0 = (TPU[5], TPU[7])
+
+TPU2_1 = []
+for i in TPU_day2_1:
+    TPU2_1.append(i[0])
+TPU4_1 = []
+for i in TPU_day4_1:
+    TPU4_1.append(i[0])
+TPU2_0 = []
+for i in TPU_day2_0:
+    TPU2_0.append(i[0])
+TPU4_0 = []
+for i in TPU_day4_0:
+    TPU4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPU2_1, width, color='r')
+rects2 = ax.bar(ind + width, TPU4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, TPU2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, TPU4_0, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Soybean Side A, TPU Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I','Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+plt.show()
+#--Bar Chart for VCmax Values---    
+    
+N = 2
+VCmax_day2_1 = (VCmax[0],VCmax[2])
+VCmax_day4_1 = (VCmax[1], VCmax[3])
+VCmax_day2_0 = (VCmax[4],VCmax[6])
+VCmax_day4_0 = (VCmax[5], VCmax[7])
+
+
+V2_1 = []
+for i in VCmax_day2_1:
+    V2_1.append(i[0])
+V4_1 = []
+for i in VCmax_day4_1:
+    V4_1.append(i[0])
+V2_0 = []
+for i in VCmax_day2_0:
+    V2_0.append(i[0])
+V4_0 = []
+for i in VCmax_day4_0:
+    V4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, V2_1, width, color='r')
+rects2 = ax.bar(ind + width, V4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, V2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, V4_0, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Soybean Side A, VCmax Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I', 'Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+# Scatter Plot with VCmax and TPU curves
+
+CO2curve2=[50,100,200,300]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Soybean +I +B no bug","Soybean +I +B bug","Soybean +I -B no bug","Soybean +I -B bug","Soybean -I +B no bug","Soybean -I +B bug","Soybean -I -B no bug","Soybean -I -B bug"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20])
+place = itertools.cycle([-1.5,-0.5,0,0,-0.5,-1.5,1,0.5])
+place2 = itertools.cycle([1.5,1,2,1,1,1,1,1])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+b=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+c=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+d=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+e=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+f=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+g=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+h=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+aa=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+bb=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+cc=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+dd=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+ee=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+ff=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+gg=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+hh=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE], xy=[np.max(x)+20,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE2], xy=[np.max(x)+20,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+
+    plt.title('Soybean Side B, A-Ci Curve: day 2 vs. day 4', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+# Bar Chart for TPU values
+
+N = 2
+TPU_day2_1 = (TPU[0],TPU[2])
+TPU_day4_1 = (TPU[1], TPU[3])
+TPU_day2_0 = (TPU[4],TPU[6])
+TPU_day4_0 = (TPU[5], TPU[7])
+
+TPU2_1 = []
+for i in TPU_day2_1:
+    TPU2_1.append(i[0])
+TPU4_1 = []
+for i in TPU_day4_1:
+    TPU4_1.append(i[0])
+TPU2_0 = []
+for i in TPU_day2_0:
+    TPU2_0.append(i[0])
+TPU4_0 = []
+for i in TPU_day4_0:
+    TPU4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPU2_1, width, color='r')
+rects2 = ax.bar(ind + width, TPU4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, TPU2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, TPU4_0, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Soybean Side B, TPU Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I','Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+#--Bar Chart for VCmax Values---    
+    
+N = 2
+VCmax_day2_1 = (VCmax[0],VCmax[2])
+VCmax_day4_1 = (VCmax[1], VCmax[3])
+VCmax_day2_0 = (VCmax[4],VCmax[6])
+VCmax_day4_0 = (VCmax[5], VCmax[7])
+
+
+V2_1 = []
+for i in VCmax_day2_1:
+    V2_1.append(i[0])
+V4_1 = []
+for i in VCmax_day4_1:
+    V4_1.append(i[0])
+V2_0 = []
+for i in VCmax_day2_0:
+    V2_0.append(i[0])
+V4_0 = []
+for i in VCmax_day4_0:
+    V4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, V2_1, width, color='r')
+rects2 = ax.bar(ind + width, V4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, V2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, V4_0, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Soybean Side B, VCmax Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I', 'Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+# Scatter Plot with VCmax and TPU curves
+
+CO2curve2=[50,100,200,300]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Corn +I +B no bug","Corn +I +B bug","Corn +I -B no bug","Corn +I -B bug","Corn -I +B no bug","Corn -I +B bug","Corn -I -B no bug","Corn -I -B bug"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20])
+place = itertools.cycle([0.5,0,-1,0,0,1,0,0])
+place2 = itertools.cycle([1.5,1,0,1,1,2,1,1])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+b=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+c=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+d=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+e=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+f=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+g=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+h=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+aa=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+bb=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+cc=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+dd=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+ee=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+ff=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+gg=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+hh=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE], xy=[np.max(x)+20,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE2], xy=[np.max(x)+20,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+
+    plt.title('Corn Side A, A-Ci Curve: day 2 vs. day 4', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+# Bar Chart for TPU values
+
+N = 2
+TPU_day2_1 = (TPU[0],TPU[2])
+TPU_day4_1 = (TPU[1], TPU[3])
+TPU_day2_0 = (TPU[4],TPU[6])
+TPU_day4_0 = (TPU[5], TPU[7])
+
+TPU2_1 = []
+for i in TPU_day2_1:
+    TPU2_1.append(i[0])
+TPU4_1 = []
+for i in TPU_day4_1:
+    TPU4_1.append(i[0])
+TPU2_0 = []
+for i in TPU_day2_0:
+    TPU2_0.append(i[0])
+TPU4_0 = []
+for i in TPU_day4_0:
+    TPU4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPU2_1, width, color='r')
+rects2 = ax.bar(ind + width, TPU4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, TPU2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, TPU4_0, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Corn Side A, TPU Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I','Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+plt.show()
+#--Bar Chart for VCmax Values---    
+    
+N = 2
+VCmax_day2_1 = (VCmax[0],VCmax[2])
+VCmax_day4_1 = (VCmax[1], VCmax[3])
+VCmax_day2_0 = (VCmax[4],VCmax[6])
+VCmax_day4_0 = (VCmax[5], VCmax[7])
+
+
+V2_1 = []
+for i in VCmax_day2_1:
+    V2_1.append(i[0])
+V4_1 = []
+for i in VCmax_day4_1:
+    V4_1.append(i[0])
+V2_0 = []
+for i in VCmax_day2_0:
+    V2_0.append(i[0])
+V4_0 = []
+for i in VCmax_day4_0:
+    V4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, V2_1, width, color='r')
+rects2 = ax.bar(ind + width, V4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, V2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, V4_0, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Corn Side A, VCmax Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I', 'Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
+
+# Scatter Plot with VCmax and TPU curves
+
+CO2curve2=[100,200,300,400]
+
+colors = itertools.cycle(["r","r","b","b","g","g","c","c"]) 
+fill = itertools.cycle(["r","none","b","none","g","none","c","none"])
+labels = itertools.cycle(["Corn +I +B no bug","Corn +I +B bug","Corn +I -B no bug","Corn +I -B bug","Corn -I +B no bug","Corn -I +B bug","Corn -I -B no bug","Corn -I -B bug"])
+dashes = itertools.cycle([1,20,1,20,1,20,1,20])
+place = itertools.cycle([0,1,-1,0,0.5,1,-1,0])
+place2 = itertools.cycle([1,1,0,1,1,1,0,1])
+values = itertools.cycle([0,1,2,3,4,5,6,7])
+font = itertools.cycle(["bold","normal","bold","normal","bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+b=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+c=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+d=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+e=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+f=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+g=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-05')&(Data.Date<='2016-07-06')]
+h=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-07-07')&(Data.Date<='2016-07-08')]
+aa=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+bb=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+cc=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+dd=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+ee=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+ff=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==1)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+gg=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-27')&(Data.Date<='2016-06-28')]
+hh=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-29')&(Data.Date<='2016-06-30')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+fr5=[e,ee]
+fr6=[f,ff]
+fr7=[g,gg]
+fr8=[h,hh]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+E = pd.concat(fr5)
+F = pd.concat(fr6)
+G = pd.concat(fr7)
+H = pd.concat(fr8)
+    
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D,E,F,G,H]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE], xy=[np.max(x)+20,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+20,np.max(yfit21)-PLACE2], xy=[np.max(x)+20,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+
+    plt.title('Corn Side B, A-Ci Curve: day 2 vs. day 4', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,25)
+    plt.xlim(-100,2500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+# Bar Chart for TPU values
+
+N = 2
+TPU_day2_1 = (TPU[0],TPU[2])
+TPU_day4_1 = (TPU[1], TPU[3])
+TPU_day2_0 = (TPU[4],TPU[6])
+TPU_day4_0 = (TPU[5], TPU[7])
+
+TPU2_1 = []
+for i in TPU_day2_1:
+    TPU2_1.append(i[0])
+TPU4_1 = []
+for i in TPU_day4_1:
+    TPU4_1.append(i[0])
+TPU2_0 = []
+for i in TPU_day2_0:
+    TPU2_0.append(i[0])
+TPU4_0 = []
+for i in TPU_day4_0:
+    TPU4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPU2_1, width, color='r')
+rects2 = ax.bar(ind + width, TPU4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, TPU2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, TPU4_0, width, color='c')
+
+ax.set_ylabel('TPU')
+ax.set_title('Corn Side B, TPU Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I','Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+plt.show()
+#--Bar Chart for VCmax Values---    
+    
+N = 2
+VCmax_day2_1 = (VCmax[0],VCmax[2])
+VCmax_day4_1 = (VCmax[1], VCmax[3])
+VCmax_day2_0 = (VCmax[4],VCmax[6])
+VCmax_day4_0 = (VCmax[5], VCmax[7])
+
+
+V2_1 = []
+for i in VCmax_day2_1:
+    V2_1.append(i[0])
+V4_1 = []
+for i in VCmax_day4_1:
+    V4_1.append(i[0])
+V2_0 = []
+for i in VCmax_day2_0:
+    V2_0.append(i[0])
+V4_0 = []
+for i in VCmax_day4_0:
+    V4_0.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.2       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, V2_1, width, color='r')
+rects2 = ax.bar(ind + width, V4_1, width, color='b')
+rects3 = ax.bar(ind + 2*width, V2_0, width, color='g')
+rects4 = ax.bar(ind + 3*width, V4_0, width, color='c')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Corn Side B, VCmax Day 2 vs. Day 4', fontsize=18)
+ax.set_xticks(ind + width)
+ax.set_xticklabels(('+Barrier', '-Barrier'))
+
+ax.legend((rects1[0], rects2[0],rects3[0], rects4[0]), ('Day 2 +I', 'Day 4 +I','Day 2 -I', 'Day 4 -I'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+autolabel(rects3)
+autolabel(rects4)
+
+plt.show()
