@@ -1,0 +1,460 @@
+#---IMPORT FILES---
+import numpy as np 
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import os
+import itertools
+import numpy.polynomial.polynomial as poly
+from scipy import stats
+from scipy.optimize import curve_fit
+%matplotlib inline
+mpl.rcParams["figure.figsize"]=(12,8)
+
+#---CREATE DATAFRAME FROM FILES---
+path='C:\Users\Olivia\Documents\Thesis\Licor Data\Experiment 3\Baseline\CSV/'
+dataframe = []
+for File in os.listdir(path):
+    name, ext = os.path.splitext(File) # gives you the name of each file separate from its extension (.csv)
+    df=pd.read_csv('%s%s'%(path,File)) # defines the dataframe
+    df['Filename'] = name # creates new column with the file names and fills it
+    dataframe.append(df)
+    Data1 = pd.concat(dataframe)
+path='C:\Users\Olivia\Documents\Thesis\Licor Data\Experiment 2\Baseline\CSV/'
+dataframe = []
+for File in os.listdir(path):
+    name, ext = os.path.splitext(File) # gives you the name of each file separate from its extension (.csv)
+    df=pd.read_csv('%s%s'%(path,File)) # defines the dataframe
+    df['Filename'] = name # creates new column with the file names and fills it
+    dataframe.append(df)
+    Data2 = pd.concat(dataframe)
+frames = (Data1,Data2)
+Data = pd.concat(frames)
+#---REMOVE REMARKS---
+Data = Data[::][Data.Obs!='Remark=']
+
+#---CREATE NEW COLUMNS FOR LABELING----
+Data["Date"], Data["Plant"], Data["Number"], Data["Side"] = zip(*Data["Filename"].str.split('_').tolist())
+Data.loc[:,'Number'] = Data['Number'].astype(float) # changes the column, Number, from strings into floats (numbers)
+Data["Date"]=pd.to_datetime(Data['Date'], format = "%y%m%d")
+Data.loc[:,'Inoculant'] = 5
+Data.loc[:,'Barrier'] = 5
+Data.Inoculant.loc[Data.Number<=24] =1
+Data.Inoculant.loc[Data.Number>24] =0
+barrier = (18,20,22,24,26,28,30,32,50,52,54,56,58,60,62,64)
+mesh = (17,19,21,23,25,27,29,31,49,51,53,55,57,59,61,63)
+for i in barrier:
+    Data.Barrier.loc[(Data.Number==i)]=1
+for j in mesh:
+    Data.Barrier.loc[(Data.Number==j)]=0
+    
+#---REMOVE BAD DATA---
+#Data = Data[::][Data.Filename!='160701_corn_53_B']
+Data = Data[::][Data.Obs!='5']
+Data = Data[::][Data.Obs!='12']
+#---LIGHT CURVES---
+Data=Data[(Data.Photo>-1)]
+
+#---DEFINE CO2 RESPONSE CURVE---
+CO2curve = [50, 100, 200, 300, 400, 600, 800, 1200, 1400] # 400 is omitted for now because the dataset has a ton of outliers at 400
+
+#---Definitions---
+def fitfunc_michment(xdata, Vmax, Km,R):
+    "Michaelis-Menten function" 
+    return ((Vmax * xdata) / (Km + xdata))-R
+    
+colors = itertools.cycle(["r","r","b","b","r","r","b","b"]) 
+fill = itertools.cycle(["r","r","b","b","none","none","none","none"])
+labels = itertools.cycle(["Soybean +I Side A","--","Soybean -I Side A","--","Soybean +I Side B","--","Soybean -I Side B","--"])
+
+a=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+aa=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+b=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+bb=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+c=Data.loc[(Data.Number>=17)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+cc=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+d=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+dd=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+
+for i in [a,aa,b,bb,c,cc,d,dd]:
+    x=i.Ci
+    y=i.Photo
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    plt.title('Baseline A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-5,30)
+    plt.xlim(-100,2000)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+colors = itertools.cycle(["r","r","b","b","r","r","b","b"]) 
+fill = itertools.cycle(["r","r","b","b","none","none","none","none"])
+labels = itertools.cycle(["Corn +I Side A","--", "Corn -I Side A","--", "Corn +I Side B","--", "Corn -I Side B","--"])
+
+a=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+aa=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+b=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+bb=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+c=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+cc=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+d=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+dd=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+
+for i in [a,aa,b,bb,c,cc,d,dd]:
+    x=i.Ci
+    y=i.Photo
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    plt.title('Baseline A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-5,35)
+    plt.xlim(-100,2000)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+
+CO2curve2=[50,100,200,300]
+
+#---creating cycles for graph---
+colors = itertools.cycle(["r","r","b","b"]) 
+fill = itertools.cycle(["r","none","b","none"])
+labels = itertools.cycle(["Soybean +I Side A","Soybean -I Side A","Soybean +I Side B","Soybean -I Side B"])
+dashes = itertools.cycle([1,20,1,20])
+place = itertools.cycle([0,0,1,0])
+place2 = itertools.cycle([1,1,1,1])
+values = itertools.cycle([0,1,2,3])
+font = itertools.cycle(["bold","normal","bold","normal"])
+
+#---creating slices for each set of data---
+a=Data.loc[(Data.Number>=19)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+b=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+c=Data.loc[(Data.Number>=19)&(Data.Number<=20)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+d=Data.loc[(Data.Number>=29)&(Data.Number<=32)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+aa=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+bb=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='A')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+cc=Data.loc[(Data.Number>=49)&(Data.Number<=52)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+dd=Data.loc[(Data.Number>=61)&(Data.Number<=64)&(Data.PARi>1)&(Data.Side=='B')&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+
+#---combining the two sets of data---
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+
+#---creating empty lists for TPU and VCmax---
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))  
+
+#---creating a for-loop that first runs through each dataframe and then each CO2 value---
+for i in [A,B,C,D]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+
+#---initializing cycles for graph---
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+
+#---plotting scatter---
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    
+#---creating the TPU curve-fit from the michaelis mentin function---
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+
+#---appending TPU to the empty list---
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+
+#---creating the VCmax curve-fit---
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+
+#---Making the graph pretty---
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+50,np.max(yfit21)-PLACE], xy=[np.max(x)+50,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE2], xy=[np.max(x)+30,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+    plt.title('Baseline, A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(-2,35)
+    plt.xlim(-100,1750)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+plt.show()
+#---creating a bar graph that compares TPU values---
+N = 2
+
+TPU_A = (TPU[0:2])
+TPU_B = (TPU[2:4])
+
+TPUA = []
+for i in TPU_A:
+    TPUA.append(i[0])
+TPUB = []
+for i in TPU_B:
+    TPUB.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.3       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUA, width, color='r')
+rects2 = ax.bar(ind + width, TPUB, width, color='b')
+
+ax.set_ylabel('TPU')
+ax.set_title('Baseline, TPU A vs. B', fontsize=18)
+ax.set_xticks(ind + width)
+#ax.set_xticks(ind+2 + width)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0]), ('A', 'B'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+plt.show()
+#---creating a bar graph that compares VCmax values---
+VCmax_A = (VCmax[0:2])
+VCmax_B = (VCmax[2:4])
+
+VCmaxA = []
+for i in VCmax_A:
+    VCmaxA.append(i[0])
+VCmaxB = []
+for i in VCmax_B:
+    VCmaxB.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.3       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, VCmaxA, width, color='r')
+rects2 = ax.bar(ind + width, VCmaxB, width, color='b')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Baseline, VCmax A vs. B', fontsize=18)
+ax.set_xticks(ind + width)
+ax.set_ylim(0,70)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0]), ('A', 'B'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+
+plt.show()
+
+CO2curve2=[100,200,300,400]
+
+colors = itertools.cycle(["r","r","b","b"]) 
+fill = itertools.cycle(["r","none","b","none"])
+labels = itertools.cycle(["Corn +I Side A","Corn -I Side A","Corn +I Side B","Corn -I Side B"])
+dashes = itertools.cycle([1,20,1,20])
+place = itertools.cycle([0,-0.5,1,0])
+place2 = itertools.cycle([1,1,1,1])
+values = itertools.cycle([0,1,2,3])
+font = itertools.cycle(["bold","normal","bold","normal"])
+
+a=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+b=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+c=Data.loc[(Data.Number>=21)&(Data.Number<=24)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+d=Data.loc[(Data.Number>=25)&(Data.Number<=28)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-23')&(Data.Date<='2016-06-24')]
+aa=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+bb=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='A')&(Data.Barrier==0)&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+cc=Data.loc[(Data.Number>=53)&(Data.Number<=56)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+dd=Data.loc[(Data.Number>=57)&(Data.Number<=60)&(Data.PARi>1)&(Data.Side=='B')&(Data.Barrier==0)&(Data.Date>='2016-06-30')&(Data.Date<='2016-07-01')]
+fr1=[a,aa]
+fr2=[b,bb]
+fr3=[c,cc]
+fr4=[d,dd]
+A = pd.concat(fr1)
+B = pd.concat(fr2)
+C = pd.concat(fr3)
+D = pd.concat(fr4)
+
+TPU=[]
+VCmax=[]
+plt.figure( figsize=(12,8))    
+for i in [A,B,C,D]:
+    avg=pd.DataFrame()
+    std=pd.DataFrame()
+    avg2=pd.DataFrame()
+    for CO2 in CO2curve:
+        A=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg=avg.append(A[::].mean(),ignore_index=True)
+        std=std.append(np.std(A[::]),ignore_index=True)
+    x=avg.Ci.dropna()
+    y=avg.Photo.dropna()
+    yerr=std.Photo.dropna()
+    
+    COLOR=next(colors)
+    FILL =next(fill)
+    LABEL =next(labels)
+    DASH =next(dashes)
+    PLACE = next(place)
+    PLACE2 = next(place2)
+    VALUES = next(values)
+    FONT = next(font)
+    
+    plt.scatter(x,y, s =60, facecolors=FILL, edgecolors=COLOR, label=LABEL)
+    fit21,err = curve_fit(fitfunc_michment, x, y)
+    yfit21=fitfunc_michment(x,fit21[0],fit21[1],fit21[2])
+    plt.plot(x,yfit21,color=COLOR,  linestyle='--', dashes=(10, DASH), linewidth=2)
+    plt.errorbar(x,y,yerr,c=COLOR, linestyle='none')
+    
+    fit=round(fit21[0],3)
+    TPU.append([fit])
+    
+    for CO2 in CO2curve2:
+        A2=i.loc[(i.CO2S>=CO2-10)&(i.CO2S<=CO2+10)]
+        avg2=avg2.append(A2[::].mean(),ignore_index=True)
+    x2=avg2.Ci.dropna()
+    y2=avg2.Photo.dropna()
+    fit21_2,err2 = curve_fit(fitfunc_michment, x2, y2)
+    yfit21_2=fitfunc_michment(x2,fit21_2[0],fit21_2[1],fit21_2[2])
+    
+    fit2=round(fit21_2[0],3)
+    VCmax.append([fit2])
+    
+    plt.annotate ("TPU ="+" "+"%s" %TPU[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE], xy=[np.max(x)+30,np.max(yfit21-PLACE)], fontsize=12, fontweight=FONT, color=COLOR)
+    #plt.annotate ("Vcmax ="+" "+"%s" %VCmax[VALUES], xytext=[np.max(x)+30,np.max(yfit21)-PLACE2], xy=[np.max(x)+30,np.max(yfit21-PLACE2)], fontsize=12, fontweight=FONT, color=COLOR)
+    
+    plt.title('Baseline A-Ci Curve: Side A vs. Side B', fontsize=18)
+    plt.xlabel('Ci (ppm)', fontsize=12)
+    plt.ylabel('Assimilation Rate', fontsize=12)
+    plt.ylim(5,35)
+    plt.xlim(-100,1500)
+    plt.legend(loc='lower right')
+    plt.grid(True)
+
+plt.show()
+    
+N = 2
+
+TPU_A = (TPU[0:2])
+TPU_B = (TPU[2:4])
+
+TPUA = []
+for i in TPU_A:
+    TPUA.append(i[0])
+TPUB = []
+for i in TPU_B:
+    TPUB.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.3       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, TPUA, width, color='r')
+rects2 = ax.bar(ind + width, TPUB, width, color='b')
+
+ax.set_ylabel('TPU')
+ax.set_title('Corn, TPU A vs. B', fontsize=18)
+ax.set_xticks(ind + width)
+ax.set_xticklabels(('+I', '-I'))
+ax.set_ylim(0,200)
+
+ax.legend((rects1[0], rects2[0]), ('A', 'B'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+
+plt.show()
+
+VCmax_A = (VCmax[0:2])
+VCmax_B = (VCmax[2:4])
+
+VCmaxA = []
+for i in VCmax_A:
+    VCmaxA.append(i[0])
+VCmaxB = []
+for i in VCmax_B:
+    VCmaxB.append(i[0])
+
+ind = np.arange(N)  # the x locations for the groups
+width = 0.3       # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(ind, VCmaxA, width, color='r')
+rects2 = ax.bar(ind + width, VCmaxB, width, color='b')
+
+ax.set_ylabel('VCmax')
+ax.set_title('Corn, VCmax A vs. B', fontsize=18)
+ax.set_xticks(ind + 2*width)
+ax.set_ylim(0,800)
+ax.set_xticklabels(('+I', '-I'))
+
+ax.legend((rects1[0], rects2[0]), ('A', 'B'))
+
+def autolabel(rects):
+    # attach some text labels
+    for rect in rects:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                '%d' % int(height),
+                ha='center', va='bottom')
+
+autolabel(rects1)
+autolabel(rects2)
+
+plt.show()
